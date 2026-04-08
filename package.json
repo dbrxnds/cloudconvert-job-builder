@@ -1,7 +1,7 @@
 {
-  "name": "effect-cloudconvert",
+  "name": "typed-cloudconvert",
   "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
+  "description": "Typed CloudConvert job builder with compile-time dependency checks.",
   "homepage": "https://github.com/author/library#readme",
   "bugs": {
     "url": "https://github.com/author/library/issues"
@@ -32,11 +32,9 @@
     "prepare": "vp config"
   },
   "dependencies": {
-    "cloudconvert": "^3.0.0",
-    "effect": "4.0.0-beta.43"
+    "cloudconvert": "^3.0.0"
   },
   "devDependencies": {
-    "@effect/vitest": "link:opensrc/repos/github.com/Effect-TS/effect-smol/packages/vitest",
     "@types/node": "^25.5.0",
     "@typescript/native-preview": "7.0.0-dev.20260328.1",
     "bumpp": "^11.0.1",

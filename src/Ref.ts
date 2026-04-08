@@ -1,11 +1,9 @@
-import * as Data from "effect/Data";
-import { pipeArguments } from "effect/Pipeable";
-import type { Pipeable } from "effect/Pipeable";
+import { pipeArguments, type Pipeable } from "./internal/pipe.js";
 
 /**
  * Unique symbol carried by typed job reference values.
  */
-export const RefTypeId = Symbol.for("effect-cloudconvert/Ref");
+export const RefTypeId = Symbol.for("typed-cloudconvert/Ref");
 
 /**
  * A typed reference to the output of another task in the same job.
@@ -73,9 +71,7 @@ export function output<const Name extends string>(
 /**
  * Creates a placeholder reference that can be satisfied later by a task alias.
  */
-export function placeholder<const Name extends string>(
-  name: Name,
-): PlaceholderRef<Name> {
+export function placeholder<const Name extends string>(name: Name): PlaceholderRef<Name> {
   return makeRef<PlaceholderRef<Name>>({
     [RefTypeId]: RefTypeId,
     _tag: "PlaceholderRef",
@@ -94,23 +90,23 @@ export interface ResolveRefOptions {
 /**
  * Error raised when a required placeholder cannot be resolved to a concrete task name.
  */
-export class UnresolvedRequiredRefError extends Data.TaggedError(
-  "UnresolvedRequiredRefError",
-)<{
-  readonly name: string;
-}> {
+export class UnresolvedRequiredRefError extends Error {
+  readonly _tag = "UnresolvedRequiredRefError";
+  readonly name = "UnresolvedRequiredRefError";
+
+  constructor(readonly refName: string) {
+    super(`Unresolved placeholder ref: ${refName}`);
+  }
+
   override get message(): string {
-    return `Unresolved required ref: ${this.name}`;
+    return `Unresolved placeholder ref: ${this.refName}`;
   }
 }
 
 /**
  * Resolves typed job references into the concrete task names expected by CloudConvert.
  */
-export function resolveInput(
-  value: InputValue,
-  options: ResolveRefOptions,
-): string | string[] {
+export function resolveInput(value: InputValue, options: ResolveRefOptions): string | string[] {
   if (Array.isArray(value)) {
     return value.map((item) => resolveToken(item, options));
   }
@@ -130,9 +126,7 @@ function resolveToken(value: InputToken, options: ResolveRefOptions): string {
   const resolved = options.bindings[value.name];
 
   if (resolved === undefined) {
-    throw new UnresolvedRequiredRefError({
-      name: value.name,
-    });
+    throw new UnresolvedRequiredRefError(value.name);
   }
 
   return resolved;

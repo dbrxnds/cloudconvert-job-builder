@@ -1,31 +1,34 @@
-# effect-cloudconvert
+# typed-cloudconvert
 
-A typed CloudConvert job builder with compile-time dependency checking.
+A CloudConvert job builder for TypeScript.
 
-The main goal of this package is to make CloudConvert jobs feel safe to compose:
+This library helps you build CloudConvert jobs with compile-time checks:
 
-- task names are tracked as string literals
-- duplicate task names and provided aliases are rejected
-- task inputs are validated against tasks or aliases that actually exist
-- reusable job fragments can declare placeholders such as `source`
-- the Effect service can fetch and interpret job results using the original plan
-
-The public API is exposed as modules:
-
-```ts
-import { CloudConvertClient, Job, Ref, Task } from "effect-cloudconvert";
-```
+- task names stay as string literals
+- task dependencies are validated while you build the job
+- duplicate task names are rejected
+- reusable partial jobs can declare placeholders and be completed later
 
 ## Installation
 
 ```bash
-pnpm add effect-cloudconvert cloudconvert effect
+pnpm add typed-cloudconvert
 ```
+
+## Basic Idea
+
+CloudConvert jobs are made of named tasks.
+
+A later task can reference an earlier task by name through `input`.
+
+This library keeps track of those names while you build the job, so TypeScript can tell you when a job is valid or invalid before you send it anywhere.
 
 ## Quick Start
 
+Most jobs are simple: create a few tasks, reference earlier task names in `input`, and build the final payload.
+
 ```ts
-import { Job, Task } from "effect-cloudconvert";
+import { Job, Task } from "typed-cloudconvert";
 
 const job = Job.empty().pipe(
   Job.add(
@@ -52,7 +55,7 @@ const job = Job.empty().pipe(
 const built = Job.build(job);
 ```
 
-`built` is now a CloudConvert-compatible payload:
+`built` is a plain CloudConvert job payload:
 
 ```ts
 {
@@ -74,11 +77,9 @@ const built = Job.build(job);
 }
 ```
 
-## How The Type System Helps
-
-For ordinary jobs, you usually just use plain task names in `input`.
-
 ### Valid Job
+
+This works because `"import-file"` exists before the convert task uses it.
 
 ```ts
 const validJob = Job.empty().pipe(
@@ -98,9 +99,9 @@ const validJob = Job.empty().pipe(
 );
 ```
 
-This works because `"import-file"` already exists in the job when the `convert` task is added.
-
 ### Invalid Job
+
+This does not work because `"missing-import"` was never added.
 
 ```ts
 const invalidJob = Job.empty().pipe(
@@ -120,58 +121,38 @@ The type-level error message is:
 "'convert-missing' references 'missing-import' via 'input', but it does not exist";
 ```
 
-That is the core idea: tasks can only reference names or aliases that the plan knows about.
+That is the core idea: tasks can only reference names or aliases that the plan already knows about.
 
-## Effect Integration
+## Common Task Constructors
 
-The builder is mostly a typed TypeScript DSL. The optional runtime integration uses Effect for:
+The `Task` module includes constructors for common CloudConvert operations.
 
-- the `CloudConvertClient` service tag
-- `Layer` provisioning
-- tagged runtime errors
-- plan-aware helpers that interpret raw CloudConvert job responses
+Examples:
 
-`CloudConvertClient.layer(...)` is the main integration entrypoint:
+- `Task.importUrl(...)`
+- `Task.importS3(...)`
+- `Task.convert(...)`
+- `Task.metadata(...)`
+- `Task.exportUrl(...)`
 
-```ts
-import CloudConvert from "cloudconvert";
-import * as Effect from "effect/Effect";
-import { CloudConvertClient, Job } from "effect-cloudconvert";
-
-const client = new CloudConvert(process.env.CLOUDCONVERT_API_KEY!);
-
-const program = Effect.gen(function* () {
-  const cloudConvert = yield* CloudConvertClient.CloudConvertClient;
-  return yield* cloudConvert.createJobResult(job);
-}).pipe(Effect.provide(CloudConvertClient.layer(client)));
-```
-
-The service exposes two kinds of methods:
-
-- raw CloudConvert calls
-  - `createJob(...)`
-  - `getJob(...)`
-  - `waitJob(...)`
-- plan-aware helpers
-  - `interpretJob(plan, rawJob)`
-  - `createJobResult(plan)`
-  - `getJobResult(plan, id)`
-  - `waitJobResult(plan, id)`
+There is also a generic `Task.make(...)` if you want to construct a task by explicit operation name.
 
 ## Advanced
 
 ### Reusable Fragments
 
-Reusable fragments can depend on aliases that are satisfied later.
+Sometimes you want to define a reusable partial job without knowing the final task name in advance.
+
+That is what placeholders are for.
 
 ```ts
-import { Job, Ref, Task } from "effect-cloudconvert";
+import { Job, Ref, Task } from "typed-cloudconvert";
 
 const convertMp4 = Job.empty().pipe(
   Job.add(
     Task.convert({
       name: "convert-mp4",
-      input: Ref.required("source"),
+      input: Ref.placeholder("source"),
       output_format: "mp4",
     }),
   ),
@@ -189,15 +170,17 @@ const completeJob = Job.empty().pipe(
 );
 ```
 
-In this example:
+In that example:
 
 - the fragment says it needs `source`
 - the import task says it provides `source`
-- the merged job is complete and can be built
+- merging them produces a complete job
 
-### When `Ref.required(...)` Makes Sense
+### When To Use `Ref.placeholder(...)`
 
-If you already know the exact task name, just use the task name directly:
+For ordinary jobs, you usually do **not** need `Ref.placeholder(...)`.
+
+If you already know the real task name, just use the task name directly:
 
 ```ts
 Task.convert({
@@ -207,70 +190,33 @@ Task.convert({
 });
 ```
 
-Use `Ref.required("alias")` only when the fragment author does not know the final task name yet:
-
-```ts
-Task.convert({
-  name: "convert-file",
-  input: Ref.required("source"),
-  output_format: "pdf",
-});
-```
-
-In most cases, the satisfying task should declare `provides` directly:
-
-```ts
-Task.importUrl({
-  name: "import-file",
-  provides: "source",
-  url: "https://example.com/file.pdf",
-});
-```
-
-`Job.provide(...)` still exists, but it is mainly an advanced escape hatch for manual aliasing.
+Use `Ref.placeholder("source")` only when you are creating a reusable fragment and the final task name will be chosen later.
 
 ## Main Modules
 
 ### `Task`
 
-Operation-specific constructors such as:
-
-- `Task.importUrl(...)`
-- `Task.importS3(...)`
-- `Task.convert(...)`
-- `Task.metadata(...)`
-- `Task.exportUrl(...)`
-
-There is also a generic `Task.make(...)` for explicit operation-based construction.
-
-### `Ref`
-
-Reference helpers for task dependencies:
-
-- `Ref.output("task-name")`
-- `Ref.required("alias")`
+Task constructors and task typing.
 
 ### `Job`
 
-Job composition and execution helpers:
+Job composition and build helpers.
+
+Main APIs:
 
 - `Job.empty()`
 - `Job.make(...)`
 - `Job.add(...)`
 - `Job.merge(...)`
 - `Job.build(...)`
+- `Job.interpret(...)`
 
-### `CloudConvertClient`
+### `Ref`
 
-Effect service and layer for CloudConvert runtime integration:
+Reference helpers for task dependencies.
 
-- `CloudConvertClient.CloudConvertClient`
-- `CloudConvertClient.make(...)`
-- `CloudConvertClient.layer(...)`
-- `cloudConvert.createJob(...)`
-- `cloudConvert.createJobResult(...)`
-- `cloudConvert.getJobResult(...)`
-- `cloudConvert.waitJobResult(...)`
+- `Ref.output("task-name")`
+- `Ref.placeholder("alias")`
 
 ## Development
 
@@ -297,7 +243,3 @@ Build the package:
 ```bash
 pnpm run build
 ```
-
-## Credit
-
-This package is heavily inspired by [`effect-qb`](https://github.com/relsunkaev/effect-qb), especially its staged type-state approach, branded compile-time errors, and enforcement-at-the-boundary design.

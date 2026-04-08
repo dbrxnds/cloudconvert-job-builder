@@ -1,6 +1,3 @@
-import { pipeArguments } from "effect/Pipeable";
-import type { Pipeable } from "effect/Pipeable";
-
 import type { JobTask } from "cloudconvert/built/lib/JobsResource.js";
 import type {
   ExportAzureBlobData,
@@ -32,12 +29,13 @@ import type {
   TaskWaterMarkData,
 } from "cloudconvert/built/lib/TasksResource.js";
 
+import { pipeArguments, type Pipeable } from "./internal/pipe.js";
 import * as Ref from "./Ref.js";
 
 /**
  * Unique symbol carried by typed task definitions.
  */
-export const TaskTypeId = Symbol.for("effect-cloudconvert/Task");
+export const TaskTypeId = Symbol.for("typed-cloudconvert/Task");
 
 /**
  * Supported CloudConvert task operation names.

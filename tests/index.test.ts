@@ -1,11 +1,22 @@
-import * as Effect from "effect/Effect";
-import * as EffectVitest from "@effect/vitest";
 import type { Job as CloudConvertJob } from "cloudconvert/built/lib/JobsResource.js";
-import { describe, expect, it } from "vitest";
-import { CloudConvertClient, Job, Ref, Task } from "../src/index.ts";
+import { describe, expect, it } from "vite-plus/test";
 
-describe("effect-cloudconvert", () => {
-  it("builds a simple job", () => {
+import { Job, Ref, Task } from "../src/index.js";
+
+function makeRawJob(tasks: CloudConvertJob["tasks"]): CloudConvertJob {
+  return {
+    id: "job-1",
+    tag: null,
+    status: "finished",
+    created_at: "2026-01-01T00:00:00Z",
+    started_at: "2026-01-01T00:00:01Z",
+    ended_at: "2026-01-01T00:00:02Z",
+    tasks,
+  };
+}
+
+describe("typed-cloudconvert", () => {
+  it("builds a simple job payload", () => {
     const job = Job.empty().pipe(
       Job.add(
         Task.importUrl({
@@ -16,7 +27,7 @@ describe("effect-cloudconvert", () => {
       Job.add(
         Task.convert({
           name: "convert-file",
-          input: Ref.output("import-file"),
+          input: "import-file",
           output_format: "png",
         }),
       ),
@@ -37,7 +48,44 @@ describe("effect-cloudconvert", () => {
     });
   });
 
-  EffectVitest.it.effect("creates a job through the Effect service", () => {
+  it("builds a reusable fragment when a placeholder is satisfied by provides", () => {
+    const convertFragment = Job.empty().pipe(
+      Job.add(
+        Task.convert({
+          name: "convert-mp4",
+          input: Ref.placeholder("source"),
+          output_format: "mp4",
+        }),
+      ),
+    );
+
+    const job = Job.empty().pipe(
+      Job.add(
+        Task.importUrl({
+          name: "import-file",
+          provides: "source",
+          url: "https://example.com/input.mov",
+        }),
+      ),
+      Job.merge(convertFragment),
+    );
+
+    expect(Job.build(job)).toEqual({
+      tasks: {
+        "import-file": {
+          operation: "import/url",
+          url: "https://example.com/input.mov",
+        },
+        "convert-mp4": {
+          operation: "convert",
+          input: "import-file",
+          output_format: "mp4",
+        },
+      },
+    });
+  });
+
+  it("interprets a raw CloudConvert job using the typed plan", () => {
     const job = Job.empty().pipe(
       Job.add(
         Task.importUrl({
@@ -52,149 +100,131 @@ describe("effect-cloudconvert", () => {
         }),
       ),
     );
+
     const built = Job.build(job);
 
-    return Effect.gen(function* () {
-      const client = yield* CloudConvertClient.CloudConvertClient;
-      const result = yield* client.createJobResult(job);
-      const inspectTask = result.tasksByName["inspect-file"];
+    const raw = makeRawJob([
+      {
+        id: "task-1",
+        name: "import-file",
+        operation: "import/url",
+        status: "finished",
+        message: null,
+        code: null,
+        credits: 1,
+        created_at: "2026-01-01T00:00:00Z",
+        started_at: "2026-01-01T00:00:01Z",
+        ended_at: "2026-01-01T00:00:02Z",
+        depends_on_tasks: {},
+        engine: "cloudconvert",
+        engine_version: "1",
+        payload: built.tasks["import-file"],
+        result: {
+          files: [
+            {
+              filename: "input.pdf",
+            },
+          ],
+        },
+      },
+      {
+        id: "task-2",
+        name: "inspect-file",
+        operation: "metadata",
+        status: "finished",
+        message: null,
+        code: null,
+        credits: 1,
+        created_at: "2026-01-01T00:00:00Z",
+        started_at: "2026-01-01T00:00:01Z",
+        ended_at: "2026-01-01T00:00:02Z",
+        depends_on_tasks: {
+          "import-file": "task-1",
+        },
+        engine: "cloudconvert",
+        engine_version: "1",
+        payload: built.tasks["inspect-file"],
+        result: {
+          metadata: {
+            pages: 1,
+          },
+        },
+      },
+    ]);
 
-      expect(inspectTask.operation).toBe("metadata");
-      expect(inspectTask.payload.input).toBe("import-file");
-    }).pipe(
-      Effect.provideService(CloudConvertClient.CloudConvertClient, {
-        interpretJob: (plan, rawJob) =>
-          Effect.succeed(Job.interpret(plan, rawJob)),
-        createJob: () =>
-          Effect.succeed<CloudConvertJob>({
-            id: "job-1",
-            tag: null,
-            status: "finished",
-            created_at: "2026-01-01T00:00:00Z",
-            started_at: "2026-01-01T00:00:01Z",
-            ended_at: "2026-01-01T00:00:02Z",
-            tasks: [
-              {
-                id: "task-1",
-                name: "import-file",
-                operation: "import/url",
-                status: "finished",
-                message: null,
-                code: null,
-                credits: 1,
-                created_at: "2026-01-01T00:00:00Z",
-                started_at: "2026-01-01T00:00:01Z",
-                ended_at: "2026-01-01T00:00:02Z",
-                depends_on_tasks: {},
-                engine: "cloudconvert",
-                engine_version: "1",
-                payload: built.tasks["import-file"],
-                result: {
-                  files: [
-                    {
-                      filename: "input.pdf",
-                    },
-                  ],
-                },
-              },
-              {
-                id: "task-2",
-                name: "inspect-file",
-                operation: "metadata",
-                status: "finished",
-                message: null,
-                code: null,
-                credits: 1,
-                created_at: "2026-01-01T00:00:00Z",
-                started_at: "2026-01-01T00:00:01Z",
-                ended_at: "2026-01-01T00:00:02Z",
-                depends_on_tasks: {
-                  "import-file": "task-1",
-                },
-                engine: "cloudconvert",
-                engine_version: "1",
-                payload: built.tasks["inspect-file"],
-                result: {
-                  metadata: {
-                    pages: 1,
-                  },
-                },
-              },
-            ],
-          }),
-        createJobResult: (plan) =>
-          Effect.flatMap(
-            Effect.succeed<CloudConvertJob>({
-              id: "job-1",
-              tag: null,
-              status: "finished",
-              created_at: "2026-01-01T00:00:00Z",
-              started_at: "2026-01-01T00:00:01Z",
-              ended_at: "2026-01-01T00:00:02Z",
-              tasks: [
-                {
-                  id: "task-1",
-                  name: "import-file",
-                  operation: "import/url",
-                  status: "finished",
-                  message: null,
-                  code: null,
-                  credits: 1,
-                  created_at: "2026-01-01T00:00:00Z",
-                  started_at: "2026-01-01T00:00:01Z",
-                  ended_at: "2026-01-01T00:00:02Z",
-                  depends_on_tasks: {},
-                  engine: "cloudconvert",
-                  engine_version: "1",
-                  payload: built.tasks["import-file"],
-                  result: {
-                    files: [
-                      {
-                        filename: "input.pdf",
-                      },
-                    ],
-                  },
-                },
-                {
-                  id: "task-2",
-                  name: "inspect-file",
-                  operation: "metadata",
-                  status: "finished",
-                  message: null,
-                  code: null,
-                  credits: 1,
-                  created_at: "2026-01-01T00:00:00Z",
-                  started_at: "2026-01-01T00:00:01Z",
-                  ended_at: "2026-01-01T00:00:02Z",
-                  depends_on_tasks: {
-                    "import-file": "task-1",
-                  },
-                  engine: "cloudconvert",
-                  engine_version: "1",
-                  payload: built.tasks["inspect-file"],
-                  result: {
-                    metadata: {
-                      pages: 1,
-                    },
-                  },
-                },
-              ],
-            }),
-            (rawJob) => Effect.succeed(Job.interpret(plan, rawJob)),
-          ),
-        getJob: () => Effect.die("not implemented"),
-        getJobResult: () => Effect.die("not implemented"),
-        waitJob: () => Effect.die("not implemented"),
-        waitJobResult: () => Effect.die("not implemented"),
-      }),
+    const result = Job.interpret(job, raw);
+
+    expect(result.task("inspect-file").operation).toBe("metadata");
+    expect(result.tasksByName["inspect-file"].payload.input).toBe(
+      "import-file",
     );
+    expect(result.tasksByName["import-file"].payload.url).toBe(
+      "https://example.com/input.pdf",
+    );
+    expect(
+      (
+        result.tasksByName["inspect-file"].result as {
+          metadata: { pages: number };
+        }
+      ).metadata.pages,
+    ).toBe(1);
   });
 
-  it("throws a tagged error for unresolved required refs", () => {
+  it("throws a tagged error for unresolved placeholders", () => {
     expect(() =>
       Ref.resolveInput(Ref.placeholder("missing"), {
         bindings: {},
       }),
-    ).toThrowError("Unresolved required ref: missing");
+    ).toThrowError("Unresolved placeholder ref: missing");
+  });
+
+  it("throws when the raw job response is missing a planned task", () => {
+    const job = Job.empty().pipe(
+      Job.add(
+        Task.importUrl({
+          name: "import-file",
+          url: "https://example.com/input.pdf",
+        }),
+      ),
+      Job.add(
+        Task.metadata({
+          name: "inspect-file",
+          input: "import-file",
+        }),
+      ),
+    );
+
+    const raw = makeRawJob([
+      {
+        id: "task-1",
+        name: "import-file",
+        operation: "import/url",
+        status: "finished",
+        message: null,
+        code: null,
+        credits: 1,
+        created_at: "2026-01-01T00:00:00Z",
+        started_at: "2026-01-01T00:00:01Z",
+        ended_at: "2026-01-01T00:00:02Z",
+        depends_on_tasks: {},
+        engine: "cloudconvert",
+        engine_version: "1",
+        payload: {
+          operation: "import/url",
+          url: "https://example.com/input.pdf",
+        },
+        result: {
+          files: [
+            {
+              filename: "input.pdf",
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(() => Job.interpret(job, raw)).toThrowError(
+      "Missing task in CloudConvert response: inspect-file",
+    );
   });
 });

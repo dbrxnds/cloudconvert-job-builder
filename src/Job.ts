@@ -1,17 +1,13 @@
-import * as Data from "effect/Data";
-import { dual } from "effect/Function";
-import { pipeArguments } from "effect/Pipeable";
-import type { Pipeable } from "effect/Pipeable";
-
 import type { Job as CloudConvertJob, JobTemplate } from "cloudconvert/built/lib/JobsResource.js";
 
+import { dual, pipeArguments, type Pipeable } from "./internal/pipe.js";
 import type * as Ref from "./Ref.js";
 import * as Task from "./Task.js";
 
 /**
  * Unique symbol carried by typed job plans.
  */
-export const JobTypeId = Symbol.for("effect-cloudconvert/Job");
+export const JobTypeId = Symbol.for("typed-cloudconvert/Job");
 
 interface DuplicateProvidedNameIssue<Name extends string = string> {
   readonly _tag: "DuplicateProvidedNameIssue";
@@ -280,9 +276,14 @@ export type BuiltJob<Job extends Any> = Omit<JobTemplate, "tasks"> & {
 /**
  * Tagged error raised when a fetched CloudConvert job response is missing a task declared in the plan.
  */
-export class MissingTaskInResponseError extends Data.TaggedError("MissingTaskInResponseError")<{
-  readonly taskName: string;
-}> {
+export class MissingTaskInResponseError extends Error {
+  readonly _tag = "MissingTaskInResponseError";
+  readonly name = "MissingTaskInResponseError";
+
+  constructor(readonly taskName: string) {
+    super(`Missing task in CloudConvert response: ${taskName}`);
+  }
+
   override get message(): string {
     return `Missing task in CloudConvert response: ${this.taskName}`;
   }
@@ -291,9 +292,17 @@ export class MissingTaskInResponseError extends Data.TaggedError("MissingTaskInR
 /**
  * Tagged error raised when a raw CloudConvert job cannot be interpreted using the plan.
  */
-export class JobInterpretationError extends Data.TaggedError("JobInterpretationError")<{
-  readonly cause: unknown;
-}> {
+export class JobInterpretationError extends Error {
+  readonly _tag = "JobInterpretationError";
+  readonly name = "JobInterpretationError";
+
+  constructor(
+    readonly cause: unknown,
+    message = "Failed to interpret CloudConvert job response",
+  ) {
+    super(message);
+  }
+
   override get message(): string {
     return "Failed to interpret CloudConvert job response";
   }
@@ -463,9 +472,7 @@ export function interpret<Job extends Any>(plan: Job, job: CloudConvertJob): Job
       const task = job.tasks.find((item) => item.name === definition.name);
 
       if (task === undefined) {
-        throw new MissingTaskInResponseError({
-          taskName: definition.name,
-        });
+        throw new MissingTaskInResponseError(definition.name);
       }
 
       tasksByName[definition.name as keyof TaskResultMap<Job> & string] = {
@@ -489,9 +496,7 @@ export function interpret<Job extends Any>(plan: Job, job: CloudConvertJob): Job
         const task = tasksByName[name];
 
         if (task === undefined) {
-          throw new MissingTaskInResponseError({
-            taskName: name,
-          });
+          throw new MissingTaskInResponseError(name);
         }
 
         return task;
@@ -502,6 +507,6 @@ export function interpret<Job extends Any>(plan: Job, job: CloudConvertJob): Job
       throw cause;
     }
 
-    throw new JobInterpretationError({ cause });
+    throw new JobInterpretationError(cause);
   }
 }
