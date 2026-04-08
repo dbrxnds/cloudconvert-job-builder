@@ -8,7 +8,7 @@ The main goal of this package is to make CloudConvert jobs feel safe to compose:
 - duplicate task names and provided aliases are rejected
 - task inputs are validated against tasks or aliases that actually exist
 - reusable job fragments can declare placeholders such as `source`
-- fetched job results are typed from the original plan
+- the Effect service can fetch and interpret job results using the original plan
 
 The public API is exposed as modules:
 
@@ -76,7 +76,95 @@ const built = Job.build(job);
 }
 ```
 
-## Reusable Fragments
+## How The Type System Helps
+
+For ordinary jobs, you usually just use plain task names in `input`.
+
+### Valid Job
+
+```ts
+const validJob = Job.empty().pipe(
+  Job.add(
+    Task.importUrl({
+      name: "import-file",
+      url: "https://example.com/input.pdf",
+    }),
+  ),
+  Job.add(
+    Task.convert({
+      name: "convert-file",
+      input: "import-file",
+      output_format: "png",
+    }),
+  ),
+);
+```
+
+This works because `"import-file"` already exists in the job when the `convert` task is added.
+
+### Invalid Job
+
+```ts
+const invalidJob = Job.empty().pipe(
+  Job.add(
+    Task.convert({
+      name: "convert-missing",
+      input: "missing-import",
+      output_format: "pdf",
+    }),
+  ),
+);
+```
+
+The type-level error message is:
+
+```ts
+"effect-cloudconvert: 'convert-missing' references 'missing-import' via 'input', but it does not exist";
+```
+
+That is the core idea: tasks can only reference names or aliases that the plan knows about.
+
+## Effect Integration
+
+The builder is mostly a typed TypeScript DSL. The optional runtime integration uses Effect for:
+
+- the `CloudConvertClient` service tag
+- `Layer` provisioning
+- tagged runtime errors
+- plan-aware helpers that interpret raw CloudConvert job responses
+
+`CloudConvertClient.layer(...)` is the main integration entrypoint:
+
+```ts
+import CloudConvert from "cloudconvert";
+import * as Effect from "effect/Effect";
+import { CloudConvertClient, Job } from "effect-cloudconvert";
+
+const client = new CloudConvert(process.env.CLOUDCONVERT_API_KEY!);
+
+const program = Effect.gen(function* () {
+  const cloudConvert = yield* CloudConvertClient.CloudConvertClient;
+  return yield* cloudConvert.createJobResult(job);
+}).pipe(Effect.provide(CloudConvertClient.layer(client)));
+```
+
+The service exposes two kinds of methods:
+
+- raw CloudConvert calls
+  - `createJob(...)`
+  - `getJob(...)`
+  - `waitJob(...)`
+- plan-aware helpers
+  - `interpretJob(plan, rawJob)`
+  - `createJobResult(plan)`
+  - `getJobResult(plan, id)`
+  - `waitJobResult(plan, id)`
+
+The plan-aware helpers are the spiritual successor to the older `Job.get(...)` / `Job.wait(...)` idea, but they now live on the Effect service where the actual API calls happen.
+
+## Advanced
+
+### Reusable Fragments
 
 Reusable fragments can depend on aliases that are satisfied later.
 
@@ -109,11 +197,11 @@ In this example:
 
 - the fragment says it needs `source`
 - the import task says it provides `source`
-- the merged job is complete and can be built or submitted
+- the merged job is complete and can be built
 
-## `Ref.required(...)`
+### When `Ref.required(...)` Makes Sense
 
-For ordinary jobs, you usually do not need `Ref.output(...)`. If the dependency already knows the exact task name, just use the task name directly:
+If you already know the exact task name, just use the task name directly:
 
 ```ts
 Task.convert({
@@ -123,7 +211,7 @@ Task.convert({
 });
 ```
 
-Use `Ref.required("alias")` when a reusable fragment should be satisfied later:
+Use `Ref.required("alias")` only when the fragment author does not know the final task name yet:
 
 ```ts
 Task.convert({
@@ -144,55 +232,6 @@ Task.importUrl({
 ```
 
 `Job.provide(...)` still exists, but it is mainly an advanced escape hatch for manual aliasing.
-
-## Better Type Errors
-
-When a job is incomplete, the type system produces interpolated error strings rather than only exposing a raw union of missing names.
-
-For example, this job is invalid:
-
-```ts
-const invalidJob = Job.empty().pipe(
-  Job.add(
-    Task.convert({
-      name: "convert-missing",
-      input: "missing-import",
-      output_format: "pdf",
-    }),
-  ),
-);
-```
-
-The type-level error message is:
-
-```ts
-"effect-cloudconvert: convert-missing references missing-import via input, but it does not exist";
-```
-
-## Effect Integration
-
-The builder is mostly a typed TypeScript DSL. The optional runtime integration uses Effect for:
-
-- the `CloudConvertClient` service tag
-- `Effect` return values from the client service
-- tagged runtime errors
-
-You can provide a client through the Effect environment and then use the service directly:
-
-```ts
-import CloudConvert from "cloudconvert";
-import * as Effect from "effect/Effect";
-import { CloudConvertClient, Job } from "effect-cloudconvert";
-
-const client = new CloudConvert(process.env.CLOUDCONVERT_API_KEY!);
-
-const program = Effect.gen(function* () {
-  const cloudConvert = yield* CloudConvertClient.CloudConvertClient;
-  return yield* cloudConvert.createJob(Job.build(job));
-}).pipe(
-  Effect.provideService(CloudConvertClient.CloudConvertClient, CloudConvertClient.make(client)),
-);
-```
 
 ## Main Modules
 
@@ -224,6 +263,18 @@ Job composition and execution helpers:
 - `Job.add(...)`
 - `Job.merge(...)`
 - `Job.build(...)`
+
+### `CloudConvertClient`
+
+Effect service and layer for CloudConvert runtime integration:
+
+- `CloudConvertClient.CloudConvertClient`
+- `CloudConvertClient.make(...)`
+- `CloudConvertClient.layer(...)`
+- `cloudConvert.createJob(...)`
+- `cloudConvert.createJobResult(...)`
+- `cloudConvert.getJobResult(...)`
+- `cloudConvert.waitJobResult(...)`
 
 ## Development
 

@@ -303,6 +303,10 @@ const pipe = function <A>(this: A) {
   return pipeArguments(this, arguments) as A;
 };
 
+type Mutable<A> = {
+  -readonly [K in keyof A]: A[K];
+};
+
 function taskBindings(task: Task.Any): Readonly<Record<string, string>> {
   return Object.fromEntries(task.provides.map((name) => [name, task.name]));
 }
@@ -446,4 +450,58 @@ export function build<Job extends Any>(
   return {
     tasks,
   } as [Job] extends [CompleteJob<Job>] ? BuiltJob<Job> : never;
+}
+
+/**
+ * Interprets a raw CloudConvert job using a typed job plan.
+ */
+export function interpret<Job extends Any>(plan: Job, job: CloudConvertJob): JobResult<Job> {
+  const tasksByName = Object.create(null) as Mutable<TaskResultMap<Job>>;
+
+  try {
+    for (const definition of plan.tasks) {
+      const task = job.tasks.find((item) => item.name === definition.name);
+
+      if (task === undefined) {
+        throw new MissingTaskInResponseError({
+          taskName: definition.name,
+        });
+      }
+
+      tasksByName[definition.name as keyof TaskResultMap<Job> & string] = {
+        ...task,
+        name: definition.name,
+        operation: definition.operation,
+        payload: task.payload as TaskIndexOf<Job>[typeof definition.name]["payload"],
+        result: task.result as Task.TaskResultOf<typeof definition>["result"],
+      } as TaskResultMap<Job>[keyof TaskResultMap<Job> & string];
+    }
+
+    return {
+      ...job,
+      tasks: job.tasks.map((task) => {
+        const knownTask = tasksByName[task.name as keyof TaskResultMap<Job> & string];
+        return knownTask ?? task;
+      }) as ReadonlyArray<TaskResultUnion<Job>>,
+      tasksByName,
+      pipe,
+      task(name) {
+        const task = tasksByName[name];
+
+        if (task === undefined) {
+          throw new MissingTaskInResponseError({
+            taskName: name,
+          });
+        }
+
+        return task;
+      },
+    };
+  } catch (cause) {
+    if (cause instanceof MissingTaskInResponseError || cause instanceof JobInterpretationError) {
+      throw cause;
+    }
+
+    throw new JobInterpretationError({ cause });
+  }
 }

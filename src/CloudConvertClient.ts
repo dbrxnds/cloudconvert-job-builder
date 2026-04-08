@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as ServiceMap from "effect/ServiceMap";
 
 import type { Job as CloudConvertJob, JobTemplate } from "cloudconvert/built/lib/JobsResource.js";
+import * as Job from "./Job.js";
 
 /**
  * Effect service describing the CloudConvert operations required by this library.
@@ -16,6 +17,33 @@ export interface CloudConvertClient {
   ) => Effect.Effect<CloudConvertJob, CloudConvertClientRequestError>;
   readonly getJob: (id: string) => Effect.Effect<CloudConvertJob, CloudConvertClientRequestError>;
   readonly waitJob: (id: string) => Effect.Effect<CloudConvertJob, CloudConvertClientRequestError>;
+  readonly interpretJob: <Plan extends Job.Any>(
+    plan: Plan,
+    job: CloudConvertJob,
+  ) => Effect.Effect<
+    Job.JobResultOf<Plan>,
+    Job.MissingTaskInResponseError | Job.JobInterpretationError
+  >;
+  readonly createJobResult: <Plan extends Job.Any>(
+    plan: Job.CompleteJob<Plan>,
+  ) => Effect.Effect<
+    Job.JobResultOf<Plan>,
+    CloudConvertClientRequestError | Job.MissingTaskInResponseError | Job.JobInterpretationError
+  >;
+  readonly getJobResult: <Plan extends Job.Any>(
+    plan: Plan,
+    id: string,
+  ) => Effect.Effect<
+    Job.JobResultOf<Plan>,
+    CloudConvertClientRequestError | Job.MissingTaskInResponseError | Job.JobInterpretationError
+  >;
+  readonly waitJobResult: <Plan extends Job.Any>(
+    plan: Plan,
+    id: string,
+  ) => Effect.Effect<
+    Job.JobResultOf<Plan>,
+    CloudConvertClientRequestError | Job.MissingTaskInResponseError | Job.JobInterpretationError
+  >;
 }
 
 /**
@@ -58,7 +86,7 @@ function toRequestError(
  * Wraps a raw `cloudconvert` SDK client as an Effect service implementation.
  */
 export function make(client: CloudConvert): CloudConvertClient {
-  return {
+  const self: CloudConvertClient = {
     unsafeClient: client,
     createJob(job) {
       return Effect.tryPromise({
@@ -78,7 +106,30 @@ export function make(client: CloudConvert): CloudConvertClient {
         catch: (cause) => toRequestError("waitJob", cause, id),
       });
     },
+    interpretJob<Plan extends Job.Any>(plan: Plan, job: CloudConvertJob) {
+      return Effect.try({
+        try: () => Job.interpret(plan, job),
+        catch: (cause) =>
+          cause instanceof Job.MissingTaskInResponseError ||
+          cause instanceof Job.JobInterpretationError
+            ? cause
+            : new Job.JobInterpretationError({ cause }),
+      });
+    },
+    createJobResult<Plan extends Job.Any>(plan: Job.CompleteJob<Plan>) {
+      const built = Job.build(plan as Parameters<typeof Job.build>[0]) as Job.BuiltJob<Plan>;
+
+      return Effect.flatMap(self.createJob(built), (job) => self.interpretJob(plan, job));
+    },
+    getJobResult<Plan extends Job.Any>(plan: Plan, id: string) {
+      return Effect.flatMap(self.getJob(id), (job) => self.interpretJob(plan, job));
+    },
+    waitJobResult<Plan extends Job.Any>(plan: Plan, id: string) {
+      return Effect.flatMap(self.waitJob(id), (job) => self.interpretJob(plan, job));
+    },
   };
+
+  return self;
 }
 
 /**
