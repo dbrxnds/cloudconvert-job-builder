@@ -404,9 +404,6 @@ export interface JobResult<Job extends Any>
   extends Omit<CloudConvertJob, "tasks">, Pipeable {
   readonly tasks: ReadonlyArray<TaskResultUnion<Job>>;
   readonly tasksByName: TaskResultMap<Job>;
-  task<Name extends keyof TaskResultMap<Job> & string>(
-    name: Name,
-  ): TaskResultMap<Job>[Name];
 }
 
 /**
@@ -816,7 +813,7 @@ export function build<Job extends Any>(
  * Interprets a raw CloudConvert job using a typed job plan.
  *
  * The returned job result keeps the original CloudConvert response shape while
- * restoring typed access to known tasks via `tasksByName` and `task(...)`.
+ * restoring typed access to known tasks via `tasksByName`.
  *
  * @example
  * ```ts
@@ -863,15 +860,6 @@ export function interpret<Job extends Any>(
       }) as ReadonlyArray<TaskResultUnion<Job>>,
       tasksByName,
       pipe,
-      task(name) {
-        const task = tasksByName[name];
-
-        if (task === undefined) {
-          throw new MissingTaskInResponseError(name);
-        }
-
-        return task as TaskResultMap<Job>[typeof name];
-      },
     };
   } catch (cause) {
     if (
