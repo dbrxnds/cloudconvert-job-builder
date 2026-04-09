@@ -1,9 +1,9 @@
 import { pipeArguments, type Pipeable } from "./internal/pipe.js";
 
 /**
- * Unique symbol carried by typed job reference values.
+ * Unique string identifier carried by typed job reference values.
  */
-export const RefTypeId = Symbol.for("typed-cloudconvert/Ref");
+export const RefTypeId = "~typed-cloudconvert/Ref";
 
 /**
  * A typed reference to the output of another task in the same job.

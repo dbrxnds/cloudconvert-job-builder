@@ -436,10 +436,6 @@ export class MissingTaskInResponseError extends Error {
   constructor(readonly taskName: string) {
     super(`Missing task in CloudConvert response: ${taskName}`);
   }
-
-  override get message(): string {
-    return `Missing task in CloudConvert response: ${this.taskName}`;
-  }
 }
 
 /**
@@ -455,10 +451,6 @@ export class JobInterpretationError extends Error {
     message = "Failed to interpret CloudConvert job response",
   ) {
     super(message);
-  }
-
-  override get message(): string {
-    return "Failed to interpret CloudConvert job response";
   }
 }
 
@@ -712,7 +704,7 @@ export const provide: {
     name: Name,
     output: Output,
   ): AddBindingResult<Job, Name, Output> =>
-    makeJob<AddBindingResult<Job, Name, Output>>(
+    makeJob(
       job.tasks,
       mergeBindingRecords(job.bindings, bindingRecord(name, output.task)),
     ),
@@ -766,7 +758,7 @@ export const merge: {
   ): MergeResult<Left, Right> => {
     const mergedTasks = mergeTaskList(left, right.tasks);
 
-    return makeJob<MergeResult<Left, Right>>(
+    return makeJob(
       mergedTasks.tasks,
       mergeBindingRecords(mergedTasks.bindings, right.bindings),
     );
