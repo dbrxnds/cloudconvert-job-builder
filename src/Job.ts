@@ -303,9 +303,9 @@ export type DuplicateTaskNameError<
   Job extends Any,
   Names extends string,
 > = Job & {
-  readonly __effect_cloudconvert_error__: DuplicateProvidedNameText<Names>;
-  readonly __effect_cloudconvert_duplicate_task_names__: Names;
-  readonly __effect_cloudconvert_hint__: "Each task name and provided alias must be unique within a job";
+  readonly ["~cloudconvert_error"]: DuplicateProvidedNameText<Names>;
+  readonly ["~cloudconvert_hint"]: "Each task name and provided alias must be unique within a job";
+  readonly ["~cloudconvert_duplicate_task_names"]: Names;
 };
 
 /**
@@ -316,10 +316,10 @@ export type MissingDependencyError<
   Job extends Any,
   Missing extends DependencyRequirement<any, any, any>,
 > = Job & {
-  readonly __effect_cloudconvert_error__: MissingDependencyText<Missing>;
-  readonly __effect_cloudconvert_missing_refs__: RequirementRef<Missing>;
-  readonly __effect_cloudconvert_missing_dependencies__: Missing;
-  readonly __effect_cloudconvert_hint__: 'Add the missing task, or satisfy the placeholder with a task alias such as provides: "source"';
+  readonly ["~cloudconvert_error"]: MissingDependencyText<Missing>;
+  readonly ["~cloudconvert_missing_refs"]: RequirementRef<Missing>;
+  readonly ["~cloudconvert_missing_dependencies"]: Missing;
+  readonly ["~cloudconvert_hint"]: 'Add the missing task, or satisfy the placeholder with a task alias such as provides: "source"';
 };
 
 /**
@@ -348,7 +348,7 @@ export type CompleteJob<Job extends Any> = [
  * Extracts the branded error message from a compile-time job error.
  */
 export type BrandedErrorOf<Value> = Value extends {
-  readonly __effect_cloudconvert_error__: infer Error;
+  readonly ["~cloudconvert_error"]: infer Error;
 }
   ? Error
   : never;
@@ -357,7 +357,7 @@ export type BrandedErrorOf<Value> = Value extends {
  * Extracts the branded hint message from a compile-time job error.
  */
 export type BrandedHintOf<Value> = Value extends {
-  readonly __effect_cloudconvert_hint__: infer Hint;
+  readonly ["~cloudconvert_hint"]: infer Hint;
 }
   ? Hint
   : never;
@@ -367,7 +367,7 @@ export type BrandedHintOf<Value> = Value extends {
  * error.
  */
 export type BrandedMissingRefsOf<Value> = Value extends {
-  readonly __effect_cloudconvert_missing_refs__: infer MissingRefs;
+  readonly ["~cloudconvert_missing_refs"]: infer MissingRefs;
 }
   ? MissingRefs
   : never;
@@ -376,9 +376,7 @@ type CompleteInput<Job extends Any> = Job &
   ([Job] extends [CompleteJob<Job>]
     ? unknown
     : {
-        readonly __effect_cloudconvert_error__: BrandedErrorOf<
-          CompleteJob<Job>
-        >;
+        readonly ["~cloudconvert_error"]: BrandedErrorOf<CompleteJob<Job>>;
       });
 
 type TaskResultMap<Job extends Any> = {
