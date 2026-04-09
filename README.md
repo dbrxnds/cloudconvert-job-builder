@@ -47,7 +47,7 @@ const job = Job.empty().pipe(
 const tasks = Job.build(job);
 ```
 
-`built` is a plain CloudConvert job payload:
+`tasks` is a plain object matching the CloudConvert "tasks" property structure
 
 ```ts
 {
