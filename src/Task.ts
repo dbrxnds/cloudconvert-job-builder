@@ -42,6 +42,9 @@ export const TaskTypeId = Symbol.for("typed-cloudconvert/Task");
  */
 export type OperationName = Operation["operation"];
 
+/**
+ * Maps each supported CloudConvert operation to its payload shape.
+ */
 export interface OperationMap {
   readonly "import/url": ImportUrlData;
   readonly "import/upload": ImportUploadData;
@@ -83,8 +86,17 @@ type WithTaskInputs<Data> = Data extends { readonly input: unknown }
         ? Omit<Data, "input"> & { input?: TaskInputValue }
         : Data;
 
+/**
+ * Payload type for a given CloudConvert operation.
+ *
+ * The `input` field is widened to accept typed refs such as `Ref.output(...)`
+ * and `Ref.placeholder(...)`.
+ */
 export type TaskPayload<Op extends OperationName> = WithTaskInputs<OperationMap[Op]>;
 
+/**
+ * Extracts the task or placeholder names referenced by a payload.
+ */
 export type TaskDependencies<Payload> = Payload extends {
   readonly input: infer Input;
 }
@@ -97,11 +109,28 @@ export type TaskDependencies<Payload> = Payload extends {
         ? Ref.DependenciesOf<Exclude<Input, undefined>>
         : never;
 
+/**
+ * Extracts the alias names a task contributes to a job via `provides`.
+ */
 export type ProvidedAliasesOf<Task extends Any> = Task[typeof TaskTypeId]["_Provides"];
 
 /**
  * Immutable typed description of a CloudConvert task.
  *
+ * Task definitions preserve literal task names, the selected CloudConvert
+ * operation, the payload shape, inferred dependencies, and any aliases exposed
+ * through `provides`.
+ *
+ * @example
+ * ```ts
+ * import { Task } from "typed-cloudconvert";
+ *
+ * const task = Task.convert({
+ *   name: "convert-file",
+ *   input: "import-file",
+ *   output_format: "pdf",
+ * });
+ * ```
  */
 export interface TaskDefinition<
   Name extends string = string,
@@ -125,6 +154,9 @@ export interface TaskDefinition<
   readonly provides: ReadonlyArray<Provides>;
 }
 
+/**
+ * Any typed CloudConvert task definition.
+ */
 export type Any = TaskDefinition<string, OperationName, any, any, any>;
 
 type OperationResult<Op extends OperationName, Payload> = Op extends "metadata"
@@ -144,6 +176,9 @@ type OperationResult<Op extends OperationName, Payload> = Op extends "metadata"
         readonly [key: string]: unknown;
       };
 
+/**
+ * CloudConvert file result enriched with the payload type that produced it.
+ */
 export type TypedFileResult<Payload = unknown> = FileResult & {
   readonly inferredFrom?: Payload;
 };
@@ -157,6 +192,10 @@ export type TaskResultOf<Task extends Any> = TypedTaskResult<
   Task["payload"]
 >;
 
+/**
+ * Runtime task result with explicitly supplied name, operation, and payload
+ * types.
+ */
 export type TypedTaskResult<Name extends string, Op extends OperationName, Payload> = Omit<
   JobTask,
   "name" | "operation" | "payload" | "result"
@@ -167,6 +206,9 @@ export type TypedTaskResult<Name extends string, Op extends OperationName, Paylo
   readonly result?: OperationResult<Op, Payload>;
 };
 
+/**
+ * Serialized CloudConvert task payload produced from a typed task definition.
+ */
 export type BuiltTask<Task extends Any> = {
   readonly operation: Task["operation"];
   readonly ignore_error?: boolean;
@@ -224,12 +266,34 @@ function makeTask<
   };
 }
 
+/**
+ * Returns `true` when the provided value is a typed CloudConvert task
+ * definition.
+ */
 export function isTask(value: unknown): value is Any {
   return typeof value === "object" && value !== null && TaskTypeId in value;
 }
 
 /**
  * Builds a CloudConvert task payload from a typed task definition.
+ *
+ * This resolves typed refs in `input` fields into the plain string task names
+ * expected by CloudConvert.
+ *
+ * @example
+ * ```ts
+ * import { Ref, Task } from "typed-cloudconvert";
+ *
+ * const task = Task.convert({
+ *   name: "convert-file",
+ *   input: Ref.placeholder("source"),
+ *   output_format: "pdf",
+ * });
+ *
+ * const built = Task.build(task, {
+ *   source: "import-file",
+ * });
+ * ```
  */
 export function build(task: Any, bindings: Readonly<Record<string, string>>): BuiltTask<Any> {
   const payload = task.payload as Record<string, unknown>;
@@ -252,6 +316,9 @@ export function build(task: Any, bindings: Readonly<Record<string, string>>): Bu
   } as BuiltTask<Any>;
 }
 
+/**
+ * Configuration accepted by `Task.make(...)`.
+ */
 export type MakeConfig<
   Name extends string,
   Op extends OperationName,
@@ -266,6 +333,21 @@ export type MakeConfig<
 
 /**
  * Creates a task definition from an explicit operation and payload.
+ *
+ * Prefer the operation-specific helpers such as `Task.importUrl(...)` or
+ * `Task.convert(...)` when possible. `Task.make(...)` is useful when you want
+ * one generic constructor in your own abstractions.
+ *
+ * @example
+ * ```ts
+ * import { Task } from "typed-cloudconvert";
+ *
+ * const task = Task.make({
+ *   name: "export-file",
+ *   operation: "export/url",
+ *   input: "convert-file",
+ * });
+ * ```
  */
 export function make<
   const Name extends string,
@@ -310,7 +392,6 @@ function makeOperation<Op extends OperationName>(operation: Op) {
 
 /**
  * Constructor type for operation-specific task helpers.
- *
  */
 export type TaskConstructor<Op extends OperationName> = <
   const Name extends string,
@@ -336,44 +417,138 @@ function normalizeProvides<Provides extends string>(
 
 /**
  * Creates an `import/url` task.
+ *
+ * @example
+ * ```ts
+ * import { Task } from "typed-cloudconvert";
+ *
+ * const task = Task.importUrl({
+ *   name: "import-file",
+ *   url: "https://example.com/input.pdf",
+ * });
+ * ```
  */
 export const importUrl: TaskConstructor<"import/url"> = makeOperation("import/url");
+/**
+ * Creates an `import/upload` task.
+ */
 export const importUpload: TaskConstructor<"import/upload"> = makeOperation("import/upload");
+/**
+ * Creates an `import/base64` task.
+ */
 export const importBase64: TaskConstructor<"import/base64"> = makeOperation("import/base64");
+/**
+ * Creates an `import/raw` task.
+ */
 export const importRaw: TaskConstructor<"import/raw"> = makeOperation("import/raw");
+/**
+ * Creates an `import/s3` task.
+ */
 export const importS3: TaskConstructor<"import/s3"> = makeOperation("import/s3");
+/**
+ * Creates an `import/azure/blob` task.
+ */
 export const importAzureBlob: TaskConstructor<"import/azure/blob"> =
   makeOperation("import/azure/blob");
+/**
+ * Creates an `import/google-cloud-storage` task.
+ */
 export const importGoogleCloudStorage: TaskConstructor<"import/google-cloud-storage"> =
   makeOperation("import/google-cloud-storage");
+/**
+ * Creates an `import/openstack` task.
+ */
 export const importOpenStack: TaskConstructor<"import/openstack"> =
   makeOperation("import/openstack");
+/**
+ * Creates an `import/sftp` task.
+ */
 export const importSftp: TaskConstructor<"import/sftp"> = makeOperation("import/sftp");
 /**
  * Creates a `convert` task.
+ *
+ * @example
+ * ```ts
+ * import { Task } from "typed-cloudconvert";
+ *
+ * const task = Task.convert({
+ *   name: "convert-file",
+ *   input: "import-file",
+ *   output_format: "png",
+ * });
+ * ```
  */
 export const convert: TaskConstructor<"convert"> = makeOperation("convert");
+/**
+ * Creates an `optimize` task.
+ */
 export const optimize: TaskConstructor<"optimize"> = makeOperation("optimize");
+/**
+ * Creates a `watermark` task.
+ */
 export const watermark: TaskConstructor<"watermark"> = makeOperation("watermark");
+/**
+ * Creates a `capture-website` task.
+ */
 export const captureWebsite: TaskConstructor<"capture-website"> = makeOperation("capture-website");
+/**
+ * Creates a `thumbnail` task.
+ */
 export const thumbnail: TaskConstructor<"thumbnail"> = makeOperation("thumbnail");
 /**
  * Creates a `metadata` task.
  */
 export const metadata: TaskConstructor<"metadata"> = makeOperation("metadata");
+/**
+ * Creates a `metadata/write` task.
+ */
 export const metadataWrite: TaskConstructor<"metadata/write"> = makeOperation("metadata/write");
+/**
+ * Creates a `merge` task.
+ */
 export const merge: TaskConstructor<"merge"> = makeOperation("merge");
+/**
+ * Creates an `archive` task.
+ */
 export const archive: TaskConstructor<"archive"> = makeOperation("archive");
+/**
+ * Creates a `command` task.
+ */
 export const command: TaskConstructor<"command"> = makeOperation("command");
 /**
  * Creates an `export/url` task.
+ *
+ * @example
+ * ```ts
+ * import { Task } from "typed-cloudconvert";
+ *
+ * const task = Task.exportUrl({
+ *   name: "export-file",
+ *   input: "convert-file",
+ * });
+ * ```
  */
 export const exportUrl: TaskConstructor<"export/url"> = makeOperation("export/url");
+/**
+ * Creates an `export/s3` task.
+ */
 export const exportS3: TaskConstructor<"export/s3"> = makeOperation("export/s3");
+/**
+ * Creates an `export/azure/blob` task.
+ */
 export const exportAzureBlob: TaskConstructor<"export/azure/blob"> =
   makeOperation("export/azure/blob");
+/**
+ * Creates an `export/google-cloud-storage` task.
+ */
 export const exportGoogleCloudStorage: TaskConstructor<"export/google-cloud-storage"> =
   makeOperation("export/google-cloud-storage");
+/**
+ * Creates an `export/openstack` task.
+ */
 export const exportOpenStack: TaskConstructor<"export/openstack"> =
   makeOperation("export/openstack");
+/**
+ * Creates an `export/sftp` task.
+ */
 export const exportSftp: TaskConstructor<"export/sftp"> = makeOperation("export/sftp");

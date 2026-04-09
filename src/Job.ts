@@ -32,6 +32,31 @@ type JobIssue = DuplicateProvidedNameIssue;
 
 /**
  * Immutable typed description of a CloudConvert job under construction.
+ *
+ * A `JobPlan` tracks the ordered task list together with compile-time facts
+ * about what task names and aliases are already available, which refs are still
+ * unresolved, and which duplicate names have been introduced.
+ *
+ * @example
+ * ```ts
+ * import { Job, Task } from "typed-cloudconvert";
+ *
+ * const plan = Job.empty().pipe(
+ *   Job.add(
+ *     Task.importUrl({
+ *       name: "import-file",
+ *       url: "https://example.com/input.pdf",
+ *     }),
+ *   ),
+ *   Job.add(
+ *     Task.convert({
+ *       name: "convert-file",
+ *       input: "import-file",
+ *       output_format: "png",
+ *     }),
+ *   ),
+ * );
+ * ```
  */
 export interface JobPlan<
   Tasks extends readonly Task.Any[] = readonly [],
@@ -54,13 +79,29 @@ export interface JobPlan<
   readonly bindings: Bindings;
 }
 
+/**
+ * Any typed CloudConvert job plan.
+ *
+ */
 export type Any = JobPlan<any, any, any, any, any, any>;
 
+/**
+ * Extracts the ordered task tuple from a job plan.
+ *
+ */
 export type TasksOf<Job extends Any> = Job["tasks"];
 
+/**
+ * Extracts the union of provided task names and aliases known by a job plan.
+ *
+ */
 export type ProvidedOf<Job extends Any> =
   Job extends JobPlan<any, infer Provided, any, any, any, any> ? Provided : never;
 
+/**
+ * Extracts the full dependency requirement records tracked by a job plan.
+ *
+ */
 export type RequirementDetailsOf<Job extends Any> =
   Job extends JobPlan<any, any, infer Required, any, any, any> ? Required : never;
 
@@ -96,14 +137,48 @@ type BindingRequirement<
   Output extends Ref.OutputRef<string>,
 > = DependencyRequirement<Name, Output["task"], "binding">;
 
+/**
+ * Extracts the unresolved task names or placeholder aliases still required by a
+ * job plan.
+ *
+ * @example
+ * ```ts
+ * import { Job, Ref, Task } from "typed-cloudconvert";
+ *
+ * const fragment = Job.empty().pipe(
+ *   Job.add(
+ *     Task.convert({
+ *       name: "convert-file",
+ *       input: Ref.placeholder("source"),
+ *       output_format: "pdf",
+ *     }),
+ *   ),
+ * );
+ *
+ * type Missing = Job.RequiredOf<typeof fragment>;
+ * ```
+ *
+ */
 export type RequiredOf<Job extends Any> = RequirementRef<RequirementDetailsOf<Job>>;
 
+/**
+ * Extracts the map from task names to task definitions for a job plan.
+ *
+ */
 export type TaskIndexOf<Job extends Any> =
   Job extends JobPlan<any, any, any, infer TaskIndex, any, any> ? TaskIndex : never;
 
+/**
+ * Extracts the alias bindings tracked by a job plan.
+ *
+ */
 export type BindingsOf<Job extends Any> =
   Job extends JobPlan<any, any, any, any, infer Bindings, any> ? Bindings : never;
 
+/**
+ * Extracts the tracked issue records for a job plan.
+ *
+ */
 export type IssuesOf<Job extends Any> =
   Job extends JobPlan<any, any, any, any, any, infer Issues> ? Issues : never;
 
@@ -201,12 +276,22 @@ type AddBindingResult<
   IssuesOf<Job> | (Name extends ProvidedOf<Job> ? DuplicateProvidedNameIssue<Name> : never)
 >;
 
+/**
+ * Branded compile-time error produced when a job plan contains duplicate task
+ * names or aliases.
+ *
+ */
 export type DuplicateTaskNameError<Job extends Any, Names extends string> = Job & {
   readonly __effect_cloudconvert_error__: DuplicateProvidedNameText<Names>;
   readonly __effect_cloudconvert_duplicate_task_names__: Names;
   readonly __effect_cloudconvert_hint__: "Each task name and provided alias must be unique within a job";
 };
 
+/**
+ * Branded compile-time error produced when a job plan still has unresolved
+ * dependencies.
+ *
+ */
 export type MissingDependencyError<
   Job extends Any,
   Missing extends DependencyRequirement<any, any, any>,
@@ -218,7 +303,12 @@ export type MissingDependencyError<
 };
 
 /**
- * Narrows a job plan to those whose dependencies and aliases are fully satisfied.
+ * Narrows a job plan to those whose dependencies and aliases are fully
+ * satisfied.
+ *
+ * Incomplete plans remain valuable while you are composing reusable fragments,
+ * but `CompleteJob` represents the state required by `Job.build(...)`.
+ *
  */
 export type CompleteJob<Job extends Any> = [DuplicateNamesOf<IssuesOf<Job>>] extends [never]
   ? [RequirementDetailsOf<Job>] extends [never]
@@ -226,18 +316,31 @@ export type CompleteJob<Job extends Any> = [DuplicateNamesOf<IssuesOf<Job>>] ext
     : MissingDependencyError<Job, Extract<RequirementDetailsOf<Job>, DependencyRequirement>>
   : DuplicateTaskNameError<Job, Extract<DuplicateNamesOf<IssuesOf<Job>>, string>>;
 
+/**
+ * Extracts the branded error message from a compile-time job error.
+ *
+ */
 export type BrandedErrorOf<Value> = Value extends {
   readonly __effect_cloudconvert_error__: infer Error;
 }
   ? Error
   : never;
 
+/**
+ * Extracts the branded hint message from a compile-time job error.
+ *
+ */
 export type BrandedHintOf<Value> = Value extends {
   readonly __effect_cloudconvert_hint__: infer Hint;
 }
   ? Hint
   : never;
 
+/**
+ * Extracts the unresolved ref names from a compile-time missing dependency
+ * error.
+ *
+ */
 export type BrandedMissingRefsOf<Value> = Value extends {
   readonly __effect_cloudconvert_missing_refs__: infer MissingRefs;
 }
@@ -255,26 +358,47 @@ type TaskResultMap<Job extends Any> = {
   readonly [Name in keyof TaskIndexOf<Job> & string]: Task.TaskResultOf<TaskIndexOf<Job>[Name]>;
 };
 
+/**
+ * Union of typed runtime task results for every task in a job plan.
+ *
+ */
 export type TaskResultUnion<Job extends Any> = TaskResultMap<Job>[keyof TaskResultMap<Job>];
 
+/**
+ * Typed runtime view of a CloudConvert job response.
+ *
+ * The `tasks` array and `tasksByName` index preserve the task-level types from
+ * the original plan.
+ *
+ */
 export interface JobResult<Job extends Any> extends Omit<CloudConvertJob, "tasks">, Pipeable {
   readonly tasks: ReadonlyArray<TaskResultUnion<Job>>;
   readonly tasksByName: TaskResultMap<Job>;
   task<Name extends keyof TaskResultMap<Job> & string>(name: Name): TaskResultMap<Job>[Name];
 }
 
+/**
+ * Alias for `JobResult<Job>`.
+ *
+ */
 export type JobResultOf<Job extends Any> = JobResult<Job>;
 
 type BuiltTasks<Job extends Any> = {
   readonly [Name in keyof TaskIndexOf<Job> & string]: Task.BuiltTask<TaskIndexOf<Job>[Name]>;
 };
 
+/**
+ * Serialized CloudConvert job payload produced from a complete job plan.
+ *
+ */
 export type BuiltJob<Job extends Any> = Omit<JobTemplate, "tasks"> & {
   readonly tasks: BuiltTasks<Job>;
 };
 
 /**
- * Tagged error raised when a fetched CloudConvert job response is missing a task declared in the plan.
+ * Tagged error raised when a fetched CloudConvert job response is missing a
+ * task declared in the plan.
+ *
  */
 export class MissingTaskInResponseError extends Error {
   readonly _tag = "MissingTaskInResponseError";
@@ -290,7 +414,9 @@ export class MissingTaskInResponseError extends Error {
 }
 
 /**
- * Tagged error raised when a raw CloudConvert job cannot be interpreted using the plan.
+ * Tagged error raised when a raw CloudConvert job cannot be interpreted using
+ * the plan.
+ *
  */
 export class JobInterpretationError extends Error {
   readonly _tag = "JobInterpretationError";
@@ -308,9 +434,9 @@ export class JobInterpretationError extends Error {
   }
 }
 
-const pipe = function <A>(this: A) {
+function pipe<A>(this: A) {
   return pipeArguments(this, arguments) as A;
-};
+}
 
 type Mutable<A> = {
   -readonly [K in keyof A]: A[K];
@@ -347,12 +473,24 @@ function makeJob<
   } as JobPlan<Tasks, Provided, Required, TaskIndex, Bindings, Issues>;
 }
 
+/**
+ * Returns `true` when the provided value is a typed CloudConvert job plan.
+ *
+ */
 export function isJob(value: unknown): value is Any {
   return typeof value === "object" && value !== null && JobTypeId in value;
 }
 
 /**
  * Creates an empty typed job plan.
+ *
+ * @example
+ * ```ts
+ * import { Job } from "typed-cloudconvert";
+ *
+ * const plan = Job.empty();
+ * ```
+ *
  */
 export function empty(): JobPlan {
   return makeJob<readonly [], never, never, {}, {}, never>([], {});
@@ -360,6 +498,25 @@ export function empty(): JobPlan {
 
 /**
  * Creates a job plan from a list of task definitions.
+ *
+ * This is a convenient shorthand for `Job.empty().pipe(Job.add(...), ...)`.
+ *
+ * @example
+ * ```ts
+ * import { Job, Task } from "typed-cloudconvert";
+ *
+ * const plan = Job.make(
+ *   Task.importUrl({
+ *     name: "import-file",
+ *     url: "https://example.com/input.pdf",
+ *   }),
+ *   Task.exportUrl({
+ *     name: "export-file",
+ *     input: "import-file",
+ *   }),
+ * );
+ * ```
+ *
  */
 export function make<const Tasks extends readonly Task.Any[]>(
   ...tasks: Tasks
@@ -369,6 +526,24 @@ export function make<const Tasks extends readonly Task.Any[]>(
 
 /**
  * Adds a task to a job plan.
+ *
+ * This preserves task literal types and immediately updates the plan's tracked
+ * dependencies, aliases, and duplicate-name checks.
+ *
+ * @example
+ * ```ts
+ * import { Job, Task } from "typed-cloudconvert";
+ *
+ * const plan = Job.empty().pipe(
+ *   Job.add(
+ *     Task.importUrl({
+ *       name: "import-file",
+ *       url: "https://example.com/input.pdf",
+ *     }),
+ *   ),
+ * );
+ * ```
+ *
  */
 export const add: {
   <Definition extends Task.Any>(
@@ -397,6 +572,33 @@ export const add: {
  * Manually satisfies a placeholder alias with a concrete task output.
  *
  * Most users should prefer task-level `provides` aliases instead.
+ *
+ * @example
+ * ```ts
+ * import { Job, Ref, Task } from "typed-cloudconvert";
+ *
+ * const fragment = Job.empty().pipe(
+ *   Job.add(
+ *     Task.convert({
+ *       name: "convert-file",
+ *       input: Ref.placeholder("source"),
+ *       output_format: "pdf",
+ *     }),
+ *   ),
+ * );
+ *
+ * const plan = Job.empty().pipe(
+ *   Job.add(
+ *     Task.importUrl({
+ *       name: "import-file",
+ *       url: "https://example.com/input.pdf",
+ *     }),
+ *   ),
+ *   Job.provide("source", Ref.output("import-file")),
+ *   Job.merge(fragment),
+ * );
+ * ```
+ *
  */
 export const provide: {
   <const Name extends string, const Output extends Ref.OutputRef<string>>(
@@ -423,6 +625,36 @@ export const provide: {
 
 /**
  * Merges two job plans, preserving both tasks and alias bindings.
+ *
+ * This is especially useful for composing reusable fragments that were defined
+ * independently.
+ *
+ * @example
+ * ```ts
+ * import { Job, Ref, Task } from "typed-cloudconvert";
+ *
+ * const fragment = Job.empty().pipe(
+ *   Job.add(
+ *     Task.convert({
+ *       name: "convert-file",
+ *       input: Ref.placeholder("source"),
+ *       output_format: "pdf",
+ *     }),
+ *   ),
+ * );
+ *
+ * const plan = Job.empty().pipe(
+ *   Job.add(
+ *     Task.importUrl({
+ *       name: "import-file",
+ *       provides: "source",
+ *       url: "https://example.com/input.pdf",
+ *     }),
+ *   ),
+ *   Job.merge(fragment),
+ * );
+ * ```
+ *
  */
 export const merge: {
   <Right extends Any>(right: Right): <Left extends Any>(left: Left) => MergeResult<Left, Right>;
@@ -448,6 +680,32 @@ export const merge: {
 
 /**
  * Builds a CloudConvert job payload from a complete typed job plan.
+ *
+ * Incomplete plans are rejected at compile time with branded error messages
+ * that explain what is still missing.
+ *
+ * @example
+ * ```ts
+ * import { Job, Task } from "typed-cloudconvert";
+ *
+ * const plan = Job.empty().pipe(
+ *   Job.add(
+ *     Task.importUrl({
+ *       name: "import-file",
+ *       url: "https://example.com/input.pdf",
+ *     }),
+ *   ),
+ *   Job.add(
+ *     Task.exportUrl({
+ *       name: "export-file",
+ *       input: "import-file",
+ *     }),
+ *   ),
+ * );
+ *
+ * const built = Job.build(plan);
+ * ```
+ *
  */
 export function build<Job extends Any>(
   job: CompleteInput<Job>,
@@ -463,6 +721,25 @@ export function build<Job extends Any>(
 
 /**
  * Interprets a raw CloudConvert job using a typed job plan.
+ *
+ * The returned job result keeps the original CloudConvert response shape while
+ * restoring typed access to known tasks via `tasksByName` and `task(...)`.
+ *
+ * @example
+ * ```ts
+ * import { Job, Task } from "typed-cloudconvert";
+ *
+ * const plan = Job.make(
+ *   Task.importUrl({
+ *     name: "import-file",
+ *     url: "https://example.com/input.pdf",
+ *   }),
+ * );
+ *
+ * // Later, after fetching a raw CloudConvert job response:
+ * // const typed = Job.interpret(plan, rawJob)
+ * ```
+ *
  */
 export function interpret<Job extends Any>(plan: Job, job: CloudConvertJob): JobResult<Job> {
   const tasksByName = Object.create(null) as Mutable<TaskResultMap<Job>>;

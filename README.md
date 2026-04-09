@@ -15,14 +15,6 @@ This library helps you build CloudConvert jobs with compile-time checks:
 pnpm add typed-cloudconvert
 ```
 
-## Basic Idea
-
-CloudConvert jobs are made of named tasks.
-
-A later task can reference an earlier task by name through `input`.
-
-This library keeps track of those names while you build the job, so TypeScript can tell you when a job is valid or invalid before you send it anywhere.
-
 ## Quick Start
 
 Most jobs are simple: create a few tasks, reference earlier task names in `input`, and build the final payload.
