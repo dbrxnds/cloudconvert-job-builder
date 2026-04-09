@@ -35,7 +35,7 @@ import * as Ref from "./Ref.js";
 /**
  * Unique string identifier carried by typed task definitions.
  */
-export const TaskTypeId = "~typed-cloudconvert/Task";
+export const TaskTypeId = "~cloudconvert-job-builder/Task";
 
 /**
  * Supported CloudConvert task operation names.
@@ -124,7 +124,7 @@ export type ProvidedAliasesOf<Task extends Any> =
  *
  * @example
  * ```ts
- * import { Task } from "typed-cloudconvert";
+ * import { Task } from "cloudconvert-job-builder";
  *
  * const task = Task.convert({
  *   name: "convert-file",
@@ -306,7 +306,7 @@ export function isTask(value: unknown): value is Any {
  *
  * @example
  * ```ts
- * import { Ref, Task } from "typed-cloudconvert";
+ * import { Ref, Task } from "cloudconvert-job-builder";
  *
  * const task = Task.convert({
  *   name: "convert-file",
@@ -364,7 +364,7 @@ export type MakeConfig<
  *
  * @example
  * ```ts
- * import { Task } from "typed-cloudconvert";
+ * import { Task } from "cloudconvert-job-builder";
  *
  * const task = Task.make({
  *   name: "export-file",
@@ -450,7 +450,7 @@ function normalizeProvides<Provides extends string>(
  *
  * @example
  * ```ts
- * import { Task } from "typed-cloudconvert";
+ * import { Task } from "cloudconvert-job-builder";
  *
  * const task = Task.importUrl({
  *   name: "import-file",
@@ -508,7 +508,7 @@ export const importSftp: TaskConstructor<"import/sftp"> = makeOperation("import/
  *
  * @example
  * ```ts
- * import { Task } from "typed-cloudconvert";
+ * import { Task } from "cloudconvert-job-builder";
  *
  * const task = Task.convert({
  *   name: "convert-file",
@@ -569,7 +569,7 @@ export const command: TaskConstructor<"command"> = makeOperation("command");
  *
  * @example
  * ```ts
- * import { Task } from "typed-cloudconvert";
+ * import { Task } from "cloudconvert-job-builder";
  *
  * const task = Task.exportUrl({
  *   name: "export-file",

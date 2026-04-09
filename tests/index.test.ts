@@ -15,7 +15,7 @@ function makeRawJob(tasks: CloudConvertJob["tasks"]): CloudConvertJob {
   };
 }
 
-describe("typed-cloudconvert", () => {
+describe("cloudconvert-job-builder", () => {
   it("builds a simple job payload", () => {
     const job = Job.empty().pipe(
       Job.add(

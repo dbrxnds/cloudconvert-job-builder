@@ -3,7 +3,7 @@ import { pipeArguments, type Pipeable } from "./internal/pipe.js";
 /**
  * Unique string identifier carried by typed job reference values.
  */
-export const RefTypeId = "~typed-cloudconvert/Ref";
+export const RefTypeId = "~cloudconvert-job-builder/Ref";
 
 /**
  * A typed reference to the output of another task in the same job.
@@ -82,7 +82,7 @@ const pipe = function <A>(this: A) {
  *
  * @example
  * ```ts
- * import { Ref } from "typed-cloudconvert";
+ * import { Ref } from "cloudconvert-job-builder";
  *
  * const input = Ref.output("import-file");
  * ```
@@ -103,14 +103,12 @@ export function output<const Name extends string>(
  *
  * @example
  * ```ts
- * import { Ref } from "typed-cloudconvert";
+ * import { Ref } from "cloudconvert-job-builder";
  *
  * const source = Ref.placeholder("source");
  * ```
  */
-export function placeholder<const Name extends string>(
-  name: Name,
-): PlaceholderRef<Name> {
+export function placeholder<const Name extends string>(name: Name): PlaceholderRef<Name> {
   return {
     [RefTypeId]: RefTypeId,
     _tag: "PlaceholderRef",
@@ -155,7 +153,7 @@ export class UnresolvedRequiredRefError extends Error {
  *
  * @example
  * ```ts
- * import { Ref } from "typed-cloudconvert";
+ * import { Ref } from "cloudconvert-job-builder";
  *
  * const resolved = Ref.resolveInput(
  *   [Ref.output("import-file"), Ref.placeholder("fallback")],
@@ -167,10 +165,7 @@ export class UnresolvedRequiredRefError extends Error {
  * );
  * ```
  */
-export function resolveInput(
-  value: InputValue,
-  options: ResolveRefOptions,
-): string | string[] {
+export function resolveInput(value: InputValue, options: ResolveRefOptions): string | string[] {
   if (Array.isArray(value)) {
     return value.map((item) => resolveToken(item, options));
   }

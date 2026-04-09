@@ -7,7 +7,7 @@ import * as Task from "./Task.js";
 /**
  * Unique string identifier carried by typed job plans.
  */
-export const JobTypeId = "~typed-cloudconvert/Job";
+export const JobTypeId = "~cloudconvert-job-builder/Job";
 
 interface DuplicateProvidedNameIssue<Name extends string = string> {
   readonly _tag: "DuplicateProvidedNameIssue";
@@ -39,7 +39,7 @@ type JobIssue = DuplicateProvidedNameIssue;
  *
  * @example
  * ```ts
- * import { Job, Task } from "typed-cloudconvert";
+ * import { Job, Task } from "cloudconvert-job-builder";
  *
  * const plan = Job.empty().pipe(
  *   Job.add(
@@ -137,7 +137,7 @@ type BindingRequirement<
  *
  * @example
  * ```ts
- * import { Job, Ref, Task } from "typed-cloudconvert";
+ * import { Job, Ref, Task } from "cloudconvert-job-builder";
  *
  * const fragment = Job.empty().pipe(
  *   Job.add(
@@ -502,7 +502,7 @@ export function isJob(value: unknown): value is Any {
  *
  * @example
  * ```ts
- * import { Job } from "typed-cloudconvert";
+ * import { Job } from "cloudconvert-job-builder";
  *
  * const plan = Job.empty();
  * ```
@@ -518,7 +518,7 @@ export function empty(): JobPlan {
  *
  * @example
  * ```ts
- * import { Job, Task } from "typed-cloudconvert";
+ * import { Job, Task } from "cloudconvert-job-builder";
  *
  * const plan = Job.make(
  *   Task.importUrl({
@@ -546,7 +546,7 @@ export function make<const Tasks extends readonly Task.Any[]>(
  *
  * @example
  * ```ts
- * import { Job, Task } from "typed-cloudconvert";
+ * import { Job, Task } from "cloudconvert-job-builder";
  *
  * const plan = Job.empty().pipe(
  *   Job.add(
@@ -585,7 +585,7 @@ export const add: {
  *
  * @example
  * ```ts
- * import { Job, Ref, Task } from "typed-cloudconvert";
+ * import { Job, Ref, Task } from "cloudconvert-job-builder";
  *
  * const fragment = Job.empty().pipe(
  *   Job.add(
@@ -637,7 +637,7 @@ export const provide: {
  *
  * @example
  * ```ts
- * import { Job, Ref, Task } from "typed-cloudconvert";
+ * import { Job, Ref, Task } from "cloudconvert-job-builder";
  *
  * const fragment = Job.empty().pipe(
  *   Job.add(
@@ -681,7 +681,7 @@ export const merge: {
  *
  * @example
  * ```ts
- * import { Job, Task } from "typed-cloudconvert";
+ * import { Job, Task } from "cloudconvert-job-builder";
  *
  * const plan = Job.empty().pipe(
  *   Job.add(
@@ -713,7 +713,7 @@ export function build<Job extends Any>(job: CompleteInput<Job>): BuiltTasks<Job>
  *
  * @example
  * ```ts
- * import { Job, Task } from "typed-cloudconvert";
+ * import { Job, Task } from "cloudconvert-job-builder";
  *
  * const plan = Job.make(
  *   Task.importUrl({

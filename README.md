@@ -1,6 +1,6 @@
-# typed-cloudconvert
+# cloudconvert-job-builder
 
-A CloudConvert job builder for TypeScript.
+A CloudConvert Job Builder for TypeScript.
 
 This library helps you build CloudConvert jobs with compile-time checks:
 
@@ -12,7 +12,7 @@ This library helps you build CloudConvert jobs with compile-time checks:
 ## Installation
 
 ```bash
-pnpm add typed-cloudconvert
+pnpm add cloudconvert-job-builder
 ```
 
 ## Quick Start
@@ -20,7 +20,7 @@ pnpm add typed-cloudconvert
 Most jobs are simple: create a few tasks, reference earlier task names in `input`, and build the final payload.
 
 ```ts
-import { Job, Task } from "typed-cloudconvert";
+import { Job, Task } from "cloudconvert-job-builder";
 
 const job = Job.empty().pipe(
   Job.add(
@@ -136,7 +136,7 @@ Sometimes you want to define a reusable partial job without knowing the final ta
 That is what placeholders are for.
 
 ```ts
-import { Job, Ref, Task } from "typed-cloudconvert";
+import { Job, Ref, Task } from "cloudconvert-job-builder";
 
 const convertMp4 = Job.empty().pipe(
   Job.add(
