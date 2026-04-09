@@ -223,7 +223,7 @@ describe("typed-cloudconvert", () => {
       },
     ]);
 
-    expect(() => Job.interpret(job, raw)).toThrowError(
+    expect(() => Job.interpret(job, raw)).toThrow(
       "Missing task in CloudConvert response: inspect-file",
     );
   });
