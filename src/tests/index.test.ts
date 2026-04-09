@@ -1,7 +1,7 @@
 import type { Job as CloudConvertJob } from "cloudconvert/built/lib/JobsResource.js";
 import { describe, expect, it } from "vite-plus/test";
 
-import { Job, Ref, Task } from "../src/index.js";
+import { Job, Ref, Task } from "../index.js";
 
 function makeRawJob(tasks: CloudConvertJob["tasks"]): CloudConvertJob {
   return {
